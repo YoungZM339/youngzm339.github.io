@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线工具箱 | YoungZM's Tools</title>
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --primary: #4a90e2;
+            --text: #333;
+            --text-secondary: #666;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .search-box {
+            max-width: 500px;
+            margin: 1.5rem auto;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 16px 12px 42px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            background: var(--card);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .search-box::before {
+            content: '\1F50D';
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .tool-card {
+            background: var(--card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-card .icon {
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tool-card h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .tool-card .desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .tool-card .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: auto;
+            padding-top: 0.5rem;
+        }
+
+        .tool-card .tag {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #eef3fb;
+            color: var(--primary);
+        }
+
+        .no-result {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+            display: none;
+            grid-column: 1 / -1;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>在线工具箱</h1>
+            <p>实用的在线安全与开发工具集合</p>
+            <div class="search-box">
+                <input type="text" id="search" placeholder="搜索工具名称或关键词..." autocomplete="off">
+            </div>
+        </header>
+
+        <div class="tool-grid" id="toolGrid">
+            <a class="tool-card" href="apk-aes.html" data-keywords="aes 加解密 加密 解密 apk security 安全">
+                <div class="icon">&#128274;</div>
+                <h2>AES 加解密工具</h2>
+                <div class="desc">在线 AES 加密与解密，支持多种模式和填充方式，适用于 APK 等安全场景。</div>
+                <div class="tags">
+                    <span class="tag">加密</span>
+                    <span class="tag">安全</span>
+                    <span class="tag">AES</span>
+                </div>
+            </a>
+
+            <a class="tool-card" href="base64.html" data-keywords="base64 编码 解码 转换 文本 图片">
+                <div class="icon">&#128260;</div>
+                <h2>Base64 万能转换工具</h2>
+                <div class="desc">支持文本与 Base64 互转、图片转 Base64 等多种编码格式转换。</div>
+                <div class="tags">
+                    <span class="tag">编码</span>
+                    <span class="tag">Base64</span>
+                    <span class="tag">转换</span>
+                </div>
+            </a>
+
+            <a class="tool-card" href="image-metadata-viewer.html" data-keywords="图片 元数据 exif 查看 信息 照片">
+                <div class="icon">&#128065;</div>
+                <h2>图片元数据查看器</h2>
+                <div class="desc">查看图片中嵌入的 EXIF 等元数据信息，了解照片拍摄参数等详情。</div>
+                <div class="tags">
+                    <span class="tag">图片</span>
+                    <span class="tag">EXIF</span>
+                    <span class="tag">查看</span>
+                </div>
+            </a>
+
+            <a class="tool-card" href="image-metadata-stripper.html" data-keywords="图片 元数据 清除 exif 隐私 去除">
+                <div class="icon">&#128272;</div>
+                <h2>图片元数据清除工具</h2>
+                <div class="desc">一键清除图片中的 EXIF 等元数据，保护隐私信息不被泄露。</div>
+                <div class="tags">
+                    <span class="tag">图片</span>
+                    <span class="tag">隐私</span>
+                    <span class="tag">清除</span>
+                </div>
+            </a>
+
+            <a class="tool-card" href="batch-metadata-stripper.html" data-keywords="批量 图片 元数据 清除 exif 隐私">
+                <div class="icon">&#128230;</div>
+                <h2>批量图片元数据清除工具</h2>
+                <div class="desc">批量清除多张图片的元数据信息，高效处理大量图片的隐私保护需求。</div>
+                <div class="tags">
+                    <span class="tag">批量</span>
+                    <span class="tag">图片</span>
+                    <span class="tag">隐私</span>
+                </div>
+            </a>
+
+            <a class="tool-card" href="hyos-battery.html" data-keywords="电池 容量 计算器 健康度 hyperos miui zip">
+                <div class="icon">&#128267;</div>
+                <h2>电池容量计算器</h2>
+                <div class="desc">从 HyperOS / MIUI 导出的 ZIP 文件中提取电池容量信息，计算电池健康度百分比。</div>
+                <div class="tags">
+                    <span class="tag">电池</span>
+                    <span class="tag">HyperOS</span>
+                    <span class="tag">健康度</span>
+                </div>
+            </a>
+
+            <div class="no-result" id="noResult">未找到匹配的工具</div>
+        </div>
+
+        <footer>YoungZM's Tools &copy; 2026</footer>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('search');
+        const cards = document.querySelectorAll('.tool-card');
+        const noResult = document.getElementById('noResult');
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim().toLowerCase();
+            let visible = 0;
+            cards.forEach(card => {
+                if (card.classList.contains('no-result')) return;
+                const text = (card.textContent + ' ' + (card.dataset.keywords || '')).toLowerCase();
+                const match = !q || text.includes(q);
+                card.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            noResult.style.display = visible === 0 ? 'block' : 'none';
+        });
+    </script>
+</body>
+
+</html>

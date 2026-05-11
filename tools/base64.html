@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 万能转换工具</title>
+    <style>
+        :root { --p-clr: #4a90e2; --bg: #f0f2f5; --card: #ffffff; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); padding: 20px; display: flex; flex-direction: column; align-items: center; color: #333; }
+        .container { max-width: 900px; width: 100%; }
+        .card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; }
+        h2 { margin-top: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #2c3e50; }
+        h2::before { content: ''; display: inline-block; width: 4px; height: 1.2rem; background: var(--p-clr); border-radius: 2px; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+        .field-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 13px; font-weight: bold; color: #666; }
+        
+        textarea { width: 100%; height: 140px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px; resize: vertical; box-sizing: border-box; transition: border 0.2s; }
+        textarea:focus { outline: none; border-color: var(--p-clr); box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1); }
+        
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        button { padding: 8px 16px; border: none; border-radius: 6px; background: var(--p-clr); color: white; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.secondary { background: #6c757d; }
+        button.outline { background: white; border: 1px solid #ddd; color: #555; }
+        button.outline:hover { background: #f8f9fa; border-color: #ccc; }
+
+        .preview-area { margin-top: 15px; border: 2px dashed #eee; border-radius: 8px; min-height: 100px; display: flex; justify-content: center; align-items: center; background: #fafafa; overflow: hidden; }
+        .preview-area.dragover { border-color: var(--p-clr); background: rgba(74,144,226,0.04); }
+        img { max-width: 100%; max-height: 300px; }
+        .hint { font-size: 12px; color: #999; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 style="text-align:center;">🛠️ Base64 全能转换助手</h1>
+
+    <div class="card">
+        <h2>文本 Base64 加解密</h2>
+        <div class="grid">
+            <div class="field-group">
+                <label>原始文本 (Plain Text)</label>
+                <textarea id="rawText" placeholder="在此输入普通文本...支持中文"></textarea>
+                <div class="btn-group">
+                    <button onclick="textToBase64()">编码 →</button>
+                    <button class="outline" onclick="copyValue('rawText')">复制文本</button>
+                </div>
+            </div>
+            <div class="field-group">
+                <label>Base64 编码</label>
+                <textarea id="baseText" placeholder="在此输入 Base64 编码..."></textarea>
+                <div class="btn-group">
+                    <button onclick="base64ToText()">← 解码</button>
+                    <button class="outline" onclick="copyValue('baseText')">复制编码</button>
+                </div>
+            </div>
+        </div>
+        <div class="btn-group" style="margin-top:20px; justify-content: center; border-top: 1px solid #eee; pt: 15px;">
+            <button class="secondary" onclick="clearTextSection()">清空全部文本</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>图片与 Base64 转换</h2>
+        <div class="grid">
+            <div class="field-group">
+                <label>上传图片</label>
+                <input type="file" id="imgFile" accept="image/*">
+                <div class="preview-area" id="previewBox">
+                    <span style="color: #ccc;">图片预览区</span>
+                </div>
+                <div class="btn-group" id="imgActionGroup" style="display:none;">
+                    <button class="secondary" onclick="downloadImg()">下载此图片</button>
+                </div>
+            </div>
+            <div class="field-group">
+                <label>图片 Base64 编码</label>
+                <textarea id="imgBase64" placeholder="选择图片后自动生成，或粘贴此处还原图片..."></textarea>
+                <div class="btn-group">
+                    <button class="outline" onclick="copyValue('imgBase64')">复制全称</button>
+                    <button class="outline" onclick="copyPureImgBase64()">复制纯编码</button>
+                    <button onclick="restoreImage()">还原图片 ↓</button>
+                </div>
+                <div class="hint">还原时支持有/无 "data:image" 前缀的编码</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 通用辅助：复制
+    async function copyValue(id) {
+        const el = document.getElementById(id);
+        if(!el.value) return;
+        try {
+            await navigator.clipboard.writeText(el.value);
+            alert('复制成功！');
+        } catch (err) {
+            el.select();
+            document.execCommand('copy');
+            alert('复制成功！');
+        }
+    }
+
+    // --- 文本处理逻辑 (支持中文 UTF-8) ---
+    function textToBase64() {
+        const str = document.getElementById('rawText').value;
+        if(!str) return;
+        try {
+            // 先转为 UTF-8 编码，再转 Base64
+            const b64 = btoa(unescape(encodeURIComponent(str)));
+            document.getElementById('baseText').value = b64;
+        } catch (e) {
+            alert('编码失败：' + e.message);
+        }
+    }
+
+    function base64ToText() {
+        const b64 = document.getElementById('baseText').value.trim();
+        if(!b64) return;
+        try {
+            // 先从 Base64 转回，再解码 UTF-8
+            const str = decodeURIComponent(escape(atob(b64)));
+            document.getElementById('rawText').value = str;
+        } catch (e) {
+            alert('解码失败，请检查是否为有效的 Base64 格式');
+        }
+    }
+
+    function clearTextSection() {
+        document.getElementById('rawText').value = '';
+        document.getElementById('baseText').value = '';
+    }
+
+    // --- 图片处理逻辑 ---
+    const imgFile = document.getElementById('imgFile');
+    const imgBase64 = document.getElementById('imgBase64');
+    const previewBox = document.getElementById('previewBox');
+    const imgActionGroup = document.getElementById('imgActionGroup');
+
+    // 拖拽上传支持
+    ;(function enableDragAndDrop() {
+        if (!previewBox) return;
+        previewBox.addEventListener('dragenter', (e) => { e.preventDefault(); previewBox.classList.add('dragover'); });
+        previewBox.addEventListener('dragover', (e) => { e.preventDefault(); previewBox.classList.add('dragover'); });
+        previewBox.addEventListener('dragleave', (e) => { e.preventDefault(); previewBox.classList.remove('dragover'); });
+        previewBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            previewBox.classList.remove('dragover');
+            const dt = e.dataTransfer;
+            if (!dt || !dt.files || dt.files.length === 0) return;
+            const file = dt.files[0];
+            if (!file.type.startsWith('image')) return alert('请拖拽图片文件');
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                imgBase64.value = ev.target.result;
+                showPreview(ev.target.result);
+            };
+            reader.readAsDataURL(file);
+        });
+    })();
+
+    imgFile.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            imgBase64.value = ev.target.result;
+            showPreview(ev.target.result);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    function showPreview(src) {
+        previewBox.innerHTML = '';
+        const img = new Image();
+        img.src = src;
+        previewBox.appendChild(img);
+        imgActionGroup.style.display = 'flex';
+    }
+
+    function copyPureImgBase64() {
+        const full = imgBase64.value;
+        const pure = full.split(',')[1] || full;
+        navigator.clipboard.writeText(pure);
+        alert('纯编码（无前缀）已复制');
+    }
+
+    function restoreImage() {
+        let str = imgBase64.value.trim();
+        if(!str) return alert('请先粘贴图片 Base64 编码');
+        // 自动补齐前缀逻辑
+        if(!str.startsWith('data:image')) {
+            str = 'data:image/png;base64,' + str;
+        }
+        showPreview(str);
+    }
+
+    function downloadImg() {
+        const img = previewBox.querySelector('img');
+        if(!img) return;
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = 'base64-export-' + Date.now() + '.png';
+        a.click();
+    }
+</script>
+
+</body>
+</html>

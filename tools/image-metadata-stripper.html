@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片元数据清除工具</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f0f;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+}
+h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.subtitle {
+  color: #888;
+  font-size: 0.85rem;
+  margin-bottom: 2rem;
+}
+.drop-zone {
+  width: 100%;
+  max-width: 640px;
+  border: 2px dashed #333;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: #5b8def;
+  background: rgba(91, 141, 239, 0.05);
+}
+.drop-zone p {
+  color: #666;
+  font-size: 0.95rem;
+}
+.drop-zone p strong {
+  color: #5b8def;
+}
+input[type="file"] { display: none; }
+
+.preview-area {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 1.5rem;
+  display: none;
+}
+.preview-area.active { display: block; }
+.preview-area img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #222;
+}
+
+.info-bar {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #888;
+}
+.info-bar .filename { color: #ccc; word-break: break-all; flex: 1; margin-right: 1rem; }
+
+.actions {
+  margin-top: 1.25rem;
+  display: flex;
+  gap: 0.75rem;
+}
+button {
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-primary {
+  background: #5b8def;
+  color: #fff;
+}
+.btn-primary:hover { background: #4a7cd8; }
+.btn-secondary {
+  background: #222;
+  color: #ccc;
+  border: 1px solid #333;
+}
+.btn-secondary:hover { background: #2a2a2a; }
+
+canvas { display: none; }
+
+.meta-info {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #161616;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #666;
+  line-height: 1.6;
+  display: none;
+}
+.meta-info.active { display: block; }
+.meta-info span { color: #999; }
+</style>
+</head>
+<body>
+
+<h1>图片元数据清除工具</h1>
+<p class="subtitle">通过 Canvas 重绘剥离 EXIF、C2PA、XMP 等所有元数据，仅保留像素</p>
+
+<div class="drop-zone" id="dropZone">
+  <p>拖放图片到这里，或 <strong>点击选择文件</strong></p>
+  <p style="margin-top:0.5rem;font-size:0.8rem;color:#555;">支持 JPG / PNG / WebP / BMP / GIF</p>
+</div>
+<input type="file" id="fileInput" accept="image/*">
+
+<div class="preview-area" id="previewArea">
+  <img id="previewImg" alt="预览">
+</div>
+
+<div class="info-bar" id="infoBar" style="display:none;">
+  <span class="filename" id="fileName"></span>
+  <span id="fileSize"></span>
+</div>
+
+<div class="meta-info" id="metaInfo">
+  <span>说明：</span>浏览器 Canvas API 在绘制图片时仅复制像素数据，原始文件中的 EXIF（拍摄时间、GPS、相机型号）、C2PA（内容溯源）、XMP、IPTC 等元数据均不会被保留。导出的 PNG 是一张干净的纯像素图片。
+</div>
+
+<div class="actions" id="actions" style="display:none;">
+  <button class="btn-primary" id="btnDownload">下载清除后的 PNG</button>
+  <button class="btn-secondary" id="btnReset">重新选择</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const previewArea = document.getElementById('previewArea');
+const previewImg = document.getElementById('previewImg');
+const infoBar = document.getElementById('infoBar');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+const metaInfo = document.getElementById('metaInfo');
+const actions = document.getElementById('actions');
+const btnDownload = document.getElementById('btnDownload');
+const btnReset = document.getElementById('btnReset');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  fileName.textContent = file.name;
+  fileSize.textContent = formatSize(file.size);
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      previewImg.src = canvas.toDataURL('image/png');
+      previewArea.classList.add('active');
+      metaInfo.classList.add('active');
+      infoBar.style.display = 'flex';
+      actions.style.display = 'flex';
+      dropZone.style.display = 'none';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+btnDownload.addEventListener('click', () => {
+  const a = document.createElement('a');
+  const baseName = fileName.textContent.replace(/\.[^.]+$/, '');
+  a.download = baseName + '-clean.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+});
+
+btnReset.addEventListener('click', () => {
+  previewArea.classList.remove('active');
+  metaInfo.classList.remove('active');
+  infoBar.style.display = 'none';
+  actions.style.display = 'none';
+  dropZone.style.display = '';
+  fileInput.value = '';
+});
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+</script>
+</body>
+</html>

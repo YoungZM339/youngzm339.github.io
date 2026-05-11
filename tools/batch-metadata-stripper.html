@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量图片元数据清除工具</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f0f;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+}
+h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+.subtitle { color: #888; font-size: 0.85rem; margin-bottom: 2rem; text-align: center; max-width: 640px; }
+
+.drop-zone {
+  width: 100%;
+  max-width: 860px;
+  border: 2px dashed #333;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: #5b8def;
+  background: rgba(91, 141, 239, 0.05);
+}
+.drop-zone p { color: #666; font-size: 0.95rem; }
+.drop-zone p strong { color: #5b8def; }
+input[type="file"] { display: none; }
+
+.panel {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 1.5rem;
+  display: none;
+}
+.panel.active { display: block; }
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.toolbar-left { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.toolbar-right { display: flex; gap: 0.5rem; align-items: center; }
+.stat { font-size: 0.8rem; color: #888; }
+.stat em { color: #5b8def; font-style: normal; font-weight: 600; }
+
+button {
+  padding: 0.5rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-primary { background: #5b8def; color: #fff; }
+.btn-primary:hover { background: #4a7cd8; }
+.btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+.btn-success { background: #2ea043; color: #fff; }
+.btn-success:hover { background: #238636; }
+.btn-success:disabled { background: #1a3a20; color: #446; cursor: not-allowed; }
+.btn-danger { background: #da3633; color: #fff; }
+.btn-danger:hover { background: #b62a28; }
+.btn-secondary { background: #222; color: #ccc; border: 1px solid #333; }
+.btn-secondary:hover { background: #2a2a2a; }
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #222;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  display: none;
+}
+.progress-bar.active { display: block; }
+.progress-bar .fill {
+  height: 100%;
+  background: #5b8def;
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.15s;
+}
+
+.file-list {
+  background: #141414;
+  border-radius: 10px;
+  border: 1px solid #1e1e1e;
+  overflow: hidden;
+}
+.file-list-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 100px 100px 100px 70px 80px;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: #1a1a1a;
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+.file-item {
+  display: grid;
+  grid-template-columns: 40px 1fr 100px 100px 100px 70px 80px;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 0.82rem;
+  align-items: center;
+  transition: background 0.15s;
+}
+.file-item:hover { background: #1a1a1a; }
+.file-item:last-child { border-bottom: none; }
+.file-item .idx { color: #555; font-size: 0.75rem; }
+.file-item .name {
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-item .size { color: #888; text-align: right; }
+.file-item .size-after { color: #5b8def; text-align: right; }
+.file-item .ratio { text-align: right; }
+.file-item .ratio.shrink { color: #2ea043; }
+.file-item .ratio.grow { color: #da3633; }
+.file-item .ratio.same { color: #555; }
+.file-item .status { text-align: center; }
+.file-item .action { text-align: center; }
+
+.status-pending { color: #555; }
+.status-processing { color: #dcaa32; }
+.status-done { color: #2ea043; }
+.status-error { color: #da3633; }
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: #5b8def;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.btn-icon:hover { background: rgba(91,141,239,0.1); }
+
+canvas { display: none; }
+
+.zip-progress {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #888;
+  display: none;
+}
+.zip-progress.active { display: block; }
+
+.format-select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.format-select label { font-size: 0.8rem; color: #888; }
+.format-select select {
+  background: #222;
+  color: #ccc;
+  border: 1px solid #333;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.quality-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.quality-row label { font-size: 0.8rem; color: #888; min-width: 50px; }
+.quality-row input[type="range"] { flex: 1; max-width: 200px; }
+.quality-row .val { font-size: 0.8rem; color: #aaa; min-width: 30px; }
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #222;
+  color: #ccc;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 999;
+}
+.toast.show { opacity: 1; }
+
+@media (max-width: 700px) {
+  .file-list-header, .file-item {
+    grid-template-columns: 30px 1fr 70px 70px 60px;
+  }
+  .file-item .size-after, .file-item .ratio { display: none; }
+  .file-list-header .col-after, .file-list-header .col-ratio { display: none; }
+}
+</style>
+</head>
+<body>
+
+<h1>批量图片元数据清除工具</h1>
+<p class="subtitle">拖入多张图片，通过 Canvas 重绘剥离 EXIF、C2PA、XMP、IPTC 等全部元数据，支持批量下载为 ZIP</p>
+
+<div class="drop-zone" id="dropZone">
+  <p>拖放图片到这里，或 <strong>点击选择文件</strong></p>
+  <p style="margin-top:0.5rem;font-size:0.8rem;color:#555;">支持 JPG / PNG / WebP / BMP / GIF · 可一次选择多张</p>
+</div>
+<input type="file" id="fileInput" accept="image/*" multiple>
+
+<div class="panel" id="panel">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="btn-secondary" id="btnAddMore">+ 继续添加</button>
+      <button class="btn-danger" id="btnClearAll">清空列表</button>
+      <div class="format-select">
+        <label>导出格式:</label>
+        <select id="formatSelect">
+          <option value="image/png">PNG (无损)</option>
+          <option value="image/jpeg">JPEG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+      </div>
+      <div class="quality-row" id="qualityRow" style="display:none;">
+        <label>质量:</label>
+        <input type="range" id="qualityRange" min="1" max="100" value="92">
+        <span class="val" id="qualityVal">92%</span>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <span class="stat">共 <em id="fileCount">0</em> 张 · <em id="totalSize">0</em></span>
+    </div>
+  </div>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="fill" id="progressFill"></div>
+  </div>
+
+  <div class="file-list">
+    <div class="file-list-header">
+      <span>#</span>
+      <span>文件名</span>
+      <span style="text-align:right">原始大小</span>
+      <span style="text-align:right" class="col-after">处理后</span>
+      <span style="text-align:right" class="col-ratio">变化</span>
+      <span style="text-align:center">状态</span>
+      <span style="text-align:center">操作</span>
+    </div>
+    <div id="fileListBody"></div>
+  </div>
+
+  <div class="toolbar" style="margin-top:1rem;justify-content:flex-end;">
+    <button class="btn-secondary" id="btnProcessAll">开始处理</button>
+    <button class="btn-success" id="btnDownloadZip" disabled>打包下载 ZIP</button>
+  </div>
+  <div class="zip-progress" id="zipProgress"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<canvas id="canvas"></canvas>
+
+<script>
+// ======================== State ========================
+const files = []; // { id, file, name, origSize, status, resultBlob, newSize, ratio }
+let nextId = 0;
+let processing = false;
+
+// ======================== DOM refs ========================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const panel = document.getElementById('panel');
+const fileListBody = document.getElementById('fileListBody');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const fileCount = document.getElementById('fileCount');
+const totalSize = document.getElementById('totalSize');
+const btnAddMore = document.getElementById('btnAddMore');
+const btnClearAll = document.getElementById('btnClearAll');
+const btnProcessAll = document.getElementById('btnProcessAll');
+const btnDownloadZip = document.getElementById('btnDownloadZip');
+const zipProgress = document.getElementById('zipProgress');
+const formatSelect = document.getElementById('formatSelect');
+const qualityRow = document.getElementById('qualityRow');
+const qualityRange = document.getElementById('qualityRange');
+const qualityVal = document.getElementById('qualityVal');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const toast = document.getElementById('toast');
+
+// ======================== Events ========================
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const dropped = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  if (dropped.length) addFiles(dropped);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) addFiles([...fileInput.files]);
+  fileInput.value = '';
+});
+
+btnAddMore.addEventListener('click', () => {
+  fileInput.value = '';
+  fileInput.click();
+});
+btnClearAll.addEventListener('click', () => {
+  if (processing) return;
+  files.length = 0;
+  renderList();
+  panel.classList.remove('active');
+  dropZone.style.display = '';
+});
+btnProcessAll.addEventListener('click', () => processAll());
+btnDownloadZip.addEventListener('click', () => downloadZip());
+
+formatSelect.addEventListener('change', () => {
+  const fmt = formatSelect.value;
+  qualityRow.style.display = fmt === 'image/png' ? 'none' : '';
+});
+qualityRange.addEventListener('input', () => {
+  qualityVal.textContent = qualityRange.value + '%';
+});
+
+// ======================== Add files ========================
+function addFiles(newFiles) {
+  for (const f of newFiles) {
+    // dedupe by name+size
+    if (files.some(x => x.name === f.name && x.origSize === f.size)) continue;
+    files.push({
+      id: nextId++,
+      file: f,
+      name: f.name,
+      origSize: f.size,
+      status: 'pending',
+      resultBlob: null,
+      newSize: null,
+      ratio: null
+    });
+  }
+  dropZone.style.display = 'none';
+  panel.classList.add('active');
+  renderList();
+}
+
+// ======================== Render list ========================
+function renderList() {
+  fileCount.textContent = files.length;
+  totalSize.textContent = formatSize(files.reduce((s, f) => s + f.origSize, 0));
+  btnDownloadZip.disabled = !files.some(f => f.status === 'done');
+
+  fileListBody.innerHTML = files.map((f, i) => {
+    const ext = getExt(f.name);
+    const mime = formatSelect.value;
+    const newExt = mime === 'image/png' ? 'png' : mime === 'image/jpeg' ? 'jpg' : 'webp';
+    const outName = f.name.replace(/\.[^.]+$/, '') + '-clean.' + newExt;
+
+    let ratioHtml = '-';
+    if (f.ratio !== null) {
+      const pct = ((f.ratio - 1) * 100).toFixed(1);
+      const cls = f.ratio < 1 ? 'shrink' : f.ratio > 1 ? 'grow' : 'same';
+      ratioHtml = `<span class="${cls}">${f.ratio < 1 ? '' : '+'}${pct}%</span>`;
+    }
+
+    let statusHtml = '';
+    switch (f.status) {
+      case 'pending': statusHtml = '<span class="status-pending">待处理</span>'; break;
+      case 'processing': statusHtml = '<span class="status-processing">处理中...</span>'; break;
+      case 'done': statusHtml = '<span class="status-done">完成</span>'; break;
+      case 'error': statusHtml = '<span class="status-error">失败</span>'; break;
+    }
+
+    let actionHtml = '';
+    if (f.status === 'done') {
+      actionHtml = `<button class="btn-icon" onclick="downloadSingle(${f.id})" title="下载">下载</button>`;
+    } else if (f.status === 'pending') {
+      actionHtml = `<button class="btn-icon" onclick="removeFile(${f.id})" title="移除">移除</button>`;
+    }
+
+    return `<div class="file-item" id="fi-${f.id}">
+      <span class="idx">${i + 1}</span>
+      <span class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+      <span class="size">${formatSize(f.origSize)}</span>
+      <span class="size-after">${f.newSize !== null ? formatSize(f.newSize) : '-'}</span>
+      <span class="ratio">${ratioHtml}</span>
+      <span class="status">${statusHtml}</span>
+      <span class="action">${actionHtml}</span>
+    </div>`;
+  }).join('');
+}
+
+function removeFile(id) {
+  const idx = files.findIndex(f => f.id === id);
+  if (idx !== -1) { files.splice(idx, 1); renderList(); }
+  if (files.length === 0) { panel.classList.remove('active'); dropZone.style.display = ''; }
+}
+
+// ======================== Process ========================
+async function processAll() {
+  if (processing) return;
+  processing = true;
+  btnProcessAll.disabled = true;
+  progressBar.classList.add('active');
+
+  const fmt = formatSelect.value;
+  const quality = parseInt(qualityRange.value) / 100;
+  let done = 0;
+
+  for (const f of files) {
+    if (f.status === 'done') { done++; continue; }
+    f.status = 'processing';
+    renderList();
+
+    try {
+      const blob = await processOne(f.file, fmt, quality);
+      f.resultBlob = blob;
+      f.newSize = blob.size;
+      f.ratio = blob.size / f.origSize;
+      f.status = 'done';
+    } catch (err) {
+      f.status = 'error';
+      console.error(f.name, err);
+    }
+
+    done++;
+    progressFill.style.width = (done / files.length * 100) + '%';
+    renderList();
+  }
+
+  processing = false;
+  btnProcessAll.disabled = false;
+  progressBar.classList.remove('active');
+  progressFill.style.width = '0%';
+  btnDownloadZip.disabled = !files.some(f => f.status === 'done');
+  showToast('处理完成');
+}
+
+function processOne(file, fmt, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // JPEG needs white bg (no alpha)
+      if (fmt === 'image/jpeg') {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('toBlob failed'));
+      }, fmt, fmt === 'image/png' ? undefined : quality);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error('load failed'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ======================== Download ========================
+function downloadSingle(id) {
+  const f = files.find(x => x.id === id);
+  if (!f || !f.resultBlob) return;
+
+  const mime = formatSelect.value;
+  const ext = mime === 'image/png' ? 'png' : mime === 'image/jpeg' ? 'jpg' : 'webp';
+  const outName = f.name.replace(/\.[^.]+$/, '') + '-clean.' + ext;
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f.resultBlob);
+  a.download = outName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadZip() {
+  const done = files.filter(f => f.status === 'done' && f.resultBlob);
+  if (!done.length) return;
+
+  btnDownloadZip.disabled = true;
+  zipProgress.classList.add('active');
+  zipProgress.textContent = '正在生成 ZIP...';
+
+  try {
+    const zip = new SimpleZipWriter();
+    const mime = formatSelect.value;
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/jpeg' ? 'jpg' : 'webp';
+
+    for (let i = 0; i < done.length; i++) {
+      const f = done[i];
+      const outName = f.name.replace(/\.[^.]+$/, '') + '-clean.' + ext;
+      const buf = await f.resultBlob.arrayBuffer();
+      zip.addFile(outName, new Uint8Array(buf));
+      zipProgress.textContent = `正在打包 ${i + 1}/${done.length}...`;
+    }
+
+    const zipBlob = zip.generate();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zipBlob);
+    a.download = 'images-clean.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('ZIP 下载完成');
+  } catch (err) {
+    showToast('ZIP 生成失败: ' + err.message);
+  }
+
+  btnDownloadZip.disabled = false;
+  zipProgress.classList.remove('active');
+}
+
+// ======================== Minimal ZIP writer (no compression, stored) ========================
+class SimpleZipWriter {
+  constructor() { this.entries = []; }
+
+  addFile(name, data) {
+    const nameBytes = new TextEncoder().encode(name);
+    this.entries.push({ name: nameBytes, data });
+  }
+
+  generate() {
+    const parts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    for (const entry of this.entries) {
+      const { name, data } = entry;
+      const crc = crc32(data);
+
+      // Local file header
+      const local = new Uint8Array(30 + name.length + data.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true);  // sig
+      lv.setUint16(4, 20, true);           // version needed
+      lv.setUint16(6, 0, true);            // flags
+      lv.setUint16(8, 0, true);            // compression (stored)
+      lv.setUint16(10, 0, true);           // mod time
+      lv.setUint16(12, 0, true);           // mod date
+      lv.setUint32(14, crc, true);         // crc32
+      lv.setUint32(18, data.length, true); // compressed size
+      lv.setUint32(22, data.length, true); // uncompressed size
+      lv.setUint16(26, name.length, true); // name len
+      lv.setUint16(28, 0, true);           // extra len
+      local.set(name, 30);
+      local.set(data, 30 + name.length);
+      parts.push(local);
+
+      // Central directory entry
+      const central = new Uint8Array(46 + name.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);   // sig
+      cv.setUint16(4, 20, true);           // version made by
+      cv.setUint16(6, 20, true);           // version needed
+      cv.setUint16(8, 0, true);            // flags
+      cv.setUint16(10, 0, true);           // compression
+      cv.setUint16(12, 0, true);           // mod time
+      cv.setUint16(14, 0, true);           // mod date
+      cv.setUint32(16, crc, true);         // crc32
+      cv.setUint32(20, data.length, true); // compressed
+      cv.setUint32(24, data.length, true); // uncompressed
+      cv.setUint16(28, name.length, true); // name len
+      cv.setUint16(30, 0, true);           // extra len
+      cv.setUint16(32, 0, true);           // comment len
+      cv.setUint16(34, 0, true);           // disk start
+      cv.setUint16(36, 0, true);           // internal attr
+      cv.setUint32(38, 0, true);           // external attr
+      cv.setUint32(42, offset, true);      // local header offset
+      central.set(name, 46);
+      centralParts.push(central);
+
+      offset += local.length;
+    }
+
+    const centralOffset = offset;
+    let centralSize = 0;
+    for (const c of centralParts) { parts.push(c); centralSize += c.length; }
+
+    // End of central directory
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(4, 0, true);
+    ev.setUint16(6, 0, true);
+    ev.setUint16(8, this.entries.length, true);
+    ev.setUint16(10, this.entries.length, true);
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralOffset, true);
+    ev.setUint16(20, 0, true);
+    parts.push(end);
+
+    return new Blob(parts, { type: 'application/zip' });
+  }
+}
+
+// CRC32 lookup table
+const crcTable = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ======================== Utils ========================
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function getExt(name) {
+  const m = name.match(/\.([^.]+)$/);
+  return m ? m[1].toLowerCase() : '';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>

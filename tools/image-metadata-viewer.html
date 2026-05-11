@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片元数据查看器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f0f;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+}
+h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+.subtitle { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
+
+.drop-zone {
+  width: 100%;
+  max-width: 780px;
+  border: 2px dashed #333;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: #5b8def;
+  background: rgba(91, 141, 239, 0.05);
+}
+.drop-zone p { color: #666; font-size: 0.95rem; }
+.drop-zone p strong { color: #5b8def; }
+input[type="file"] { display: none; }
+
+.results {
+  width: 100%;
+  max-width: 780px;
+  margin-top: 1.5rem;
+  display: none;
+}
+.results.active { display: block; }
+
+.image-preview {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid #222;
+  background: #111;
+}
+
+.summary-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.badge {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.badge-found { background: rgba(91, 141, 239, 0.15); color: #5b8def; }
+.badge-missing { background: rgba(255,255,255,0.05); color: #555; }
+.badge-warn { background: rgba(220, 170, 50, 0.15); color: #dcaa32; }
+
+.section {
+  margin-top: 1.25rem;
+  background: #161616;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.section-header {
+  padding: 0.75rem 1rem;
+  background: #1a1a1a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.section-header h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.section-header .tag {
+  font-size: 0.7rem;
+  color: #888;
+  background: #222;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+.section-body {
+  padding: 0.75rem 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.section-body.collapsed { display: none; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #1e1e1e;
+  vertical-align: top;
+}
+table td:first-child {
+  color: #888;
+  width: 180px;
+  white-space: nowrap;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+}
+table td:last-child {
+  color: #ccc;
+  word-break: break-all;
+}
+.gps-link {
+  color: #5b8def;
+  text-decoration: none;
+}
+.gps-link:hover { text-decoration: underline; }
+
+.raw-block {
+  font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.75rem;
+  color: #aaa;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.c2pa-info {
+  padding: 1rem;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: #ccc;
+}
+.c2pa-info .claim-label { color: #888; }
+.c2pa-info .manifest-title {
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.no-data { color: #555; font-size: 0.85rem; padding: 0.5rem 0; }
+
+.actions {
+  margin-top: 1.25rem;
+  display: flex;
+  gap: 0.75rem;
+}
+button {
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn-primary { background: #5b8def; color: #fff; }
+.btn-primary:hover { background: #4a7cd8; }
+.btn-secondary { background: #222; color: #ccc; border: 1px solid #333; }
+.btn-secondary:hover { background: #2a2a2a; }
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #222;
+  color: #ccc;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 999;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>图片元数据查看器</h1>
+<p class="subtitle">检测并解析 EXIF、XMP、IPTC、C2PA / Content Credentials</p>
+
+<div class="drop-zone" id="dropZone">
+  <p>拖放图片到这里，或 <strong>点击选择文件</strong></p>
+  <p style="margin-top:0.5rem;font-size:0.8rem;color:#555;">支持 JPG / PNG / WebP / TIFF / HEIC (部分)</p>
+</div>
+<input type="file" id="fileInput" accept="image/*">
+
+<div class="results" id="results">
+  <img class="image-preview" id="previewImg" alt="预览">
+  <div class="summary-bar" id="summaryBar"></div>
+
+  <div class="section" id="secExif">
+    <div class="section-header" onclick="toggleSection('exifBody')">
+      <h3>EXIF</h3>
+      <span class="tag" id="exifTag">检测中...</span>
+    </div>
+    <div class="section-body" id="exifBody"></div>
+  </div>
+
+  <div class="section" id="secXmp">
+    <div class="section-header" onclick="toggleSection('xmpBody')">
+      <h3>XMP</h3>
+      <span class="tag" id="xmpTag">检测中...</span>
+    </div>
+    <div class="section-body" id="xmpBody"></div>
+  </div>
+
+  <div class="section" id="secIptc">
+    <div class="section-header" onclick="toggleSection('iptcBody')">
+      <h3>IPTC</h3>
+      <span class="tag" id="iptcTag">检测中...</span>
+    </div>
+    <div class="section-body" id="iptcBody"></div>
+  </div>
+
+  <div class="section" id="secC2pa">
+    <div class="section-header" onclick="toggleSection('c2paBody')">
+      <h3>C2PA / Content Credentials</h3>
+      <span class="tag" id="c2paTag">检测中...</span>
+    </div>
+    <div class="section-body" id="c2paBody"></div>
+  </div>
+
+  <div class="section" id="secAll">
+    <div class="section-header" onclick="toggleSection('allBody')">
+      <h3>原始标签一览</h3>
+      <span class="tag" id="allTag">-</span>
+    </div>
+    <div class="section-body" id="allBody"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btnCopy">复制全部到剪贴板</button>
+    <button class="btn-secondary" id="btnReset">重新选择</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ======================== EXIF Parser ========================
+
+const EXIF_TAGS = {
+  0x0100:'ImageWidth',0x0101:'ImageLength',0x0102:'BitsPerSample',0x0103:'Compression',
+  0x0106:'PhotometricInterpretation',0x010E:'ImageDescription',0x010F:'Make',0x0110:'Model',
+  0x0111:'StripOffsets',0x0112:'Orientation',0x0115:'SamplesPerPixel',0x0116:'RowsPerStrip',
+  0x0117:'StripByteCounts',0x011A:'XResolution',0x011B:'YResolution',
+  0x011C:'PlanarConfiguration',0x0128:'ResolutionUnit',0x0131:'Software',
+  0x0132:'DateTime',0x013B:'Artist',0x013D:'Predictor',0x013E:'WhitePoint',
+  0x013F:'PrimaryChromaticities',0x0201:'JPEGInterchangeFormat',
+  0x0202:'JPEGInterchangeFormatLength',0x0211:'YCbCrCoefficients',
+  0x0212:'YCbCrSubSampling',0x0213:'YCbCrPositioning',0x0214:'ReferenceBlackWhite',
+  0x8298:'Copyright',0x8769:'ExifIFD',0x8825:'GPSInfo',
+
+  0x829A:'ExposureTime',0x829D:'FNumber',0x8822:'ExposureProgram',
+  0x8824:'SpectralSensitivity',0x8827:'ISOSpeedRatings',
+  0x8828:'OECF',0x9000:'ExifVersion',0x9003:'DateTimeOriginal',
+  0x9004:'DateTimeDigitized',0x9101:'ComponentsConfiguration',
+  0x9102:'CompressedBitsPerPixel',0x9201:'ShutterSpeedValue',
+  0x9202:'ApertureValue',0x9203:'BrightnessValue',0x9204:'ExposureBiasValue',
+  0x9205:'MaxApertureValue',0x9206:'SubjectDistance',0x9207:'MeteringMode',
+  0x9208:'LightSource',0x9209:'Flash',0x920A:'FocalLength',
+  0x9214:'SubjectArea',0x927C:'MakerNote',0x9286:'UserComment',
+  0x9290:'SubsecTime',0x9291:'SubsecTimeOriginal',0x9292:'SubsecTimeDigitized',
+  0xA000:'FlashpixVersion',0xA001:'ColorSpace',0xA002:'PixelXDimension',
+  0xA003:'PixelYDimension',0xA004:'RelatedSoundFile',0xA005:'InteroperabilityIFD',
+  0xA20B:'FlashEnergy',0xA20C:'SpatialFrequencyResponse',
+  0xA20E:'FocalPlaneXResolution',0xA20F:'FocalPlaneYResolution',
+  0xA210:'FocalPlaneResolutionUnit',0xA214:'SubjectLocation',
+  0xA215:'ExposureIndex',0xA217:'SensingMethod',
+  0xA300:'FileSource',0xA301:'SceneType',0xA302:'CFAPattern',
+  0xA401:'CustomRendered',0xA402:'ExposureMode',0xA403:'WhiteBalance',
+  0xA404:'DigitalZoomRatio',0xA405:'FocalLengthIn35mmFilm',
+  0xA406:'SceneCaptureType',0xA407:'GainControl',0xA408:'Contrast',
+  0xA409:'Saturation',0xA40A:'Sharpness',0xA40B:'DeviceSettingDescription',
+  0xA40C:'SubjectDistanceRange',0xA420:'ImageUniqueID',
+  0xA430:'CameraOwnerName',0xA431:'BodySerialNumber',
+  0xA432:'LensSpecification',0xA433:'LensMake',0xA434:'LensModel',
+  0xA435:'LensSerialNumber'
+};
+
+const GPS_TAGS = {
+  0x0001:'GPSVersionID',0x0002:'GPSLatitudeRef',0x0003:'GPSLatitude',
+  0x0004:'GPSLongitudeRef',0x0005:'GPSLongitude',0x0006:'GPSAltitudeRef',
+  0x0007:'GPSAltitude',0x0008:'GPSTimeStamp',0x0009:'GPSSatellites',
+  0x000A:'GPSStatus',0x000B:'GPSMeasureMode',0x000C:'GPSDOP',
+  0x000D:'GPSSpeedRef',0x000E:'GPSSpeed',0x000F:'GPSTrackRef',
+  0x0010:'GPSTrack',0x0011:'GPSImgDirectionRef',0x0012:'GPSImgDirection',
+  0x0013:'GPSMapDatum',0x0014:'GPSDestLatitudeRef',0x0015:'GPSDestLatitude',
+  0x0016:'GPSDestLongitudeRef',0x0017:'GPSDestLongitude',0x0018:'GPSDestBearingRef',
+  0x0019:'GPSDestBearing',0x001A:'GPSDestDistanceRef',0x001B:'GPSDestDistance',
+  0x001C:'GPSProcessingMethod',0x001D:'GPSAreaInformation',0x001E:'GPSDateStamp',
+  0x001F:'GPSDifferential',0x0020:'GPSHPositioningError'
+};
+
+const ORIENTATIONS = { 1:'正常', 2:'水平翻转', 3:'旋转180°', 4:'垂直翻转', 5:'顺时针90°+水平翻转', 6:'顺时针90°', 7:'逆时针90°+水平翻转', 8:'逆时针90°' };
+const EXPOSURE_PROGRAMS = { 0:'未定义', 1:'手动', 2:'程序自动', 3:'光圈优先', 4:'快门优先', 5:'创意模式', 6:'运动模式', 7:'人像模式', 8:'风景模式' };
+const METERING_MODES = { 0:'未知', 1:'平均', 2:'中央重点平均', 3:'点测光', 4:'多点测光', 5:'评价测光', 6:'局部测光' };
+const FLASH_FLAGS = { 0x00:'未闪光', 0x01:'闪光', 0x05:'闪光(未检测到回光)', 0x07:'闪光(检测到回光)', 0x09:'强制闪光', 0x0D:'强制闪光(未检测到回光)', 0x0F:'强制闪光(检测到回光)', 0x10:'未闪光(强制关闭)', 0x14:'未闪光(自动)', 0x18:'自动闪光', 0x19:'自动闪光(检测到回光)', 0x1D:'自动闪光(未检测到回光)', 0x1F:'自动闪光(检测到回光)', 0x20:'无闪光功能', 0x30:'无闪光功能(无)', 0x41:'闪光(红眼)', 0x45:'闪光(红眼,未检测到回光)', 0x47:'闪光(红眼,检测到回光)', 0x49:'强制闪光(红眼)', 0x4D:'强制闪光(红眼,未检测到回光)', 0x4F:'强制闪光(红眼,检测到回光)', 0x58:'自动闪光(红眼)', 0x59:'自动闪光(红眼,检测到回光)', 0x5D:'自动闪光(红眼,未检测到回光)' };
+
+function parseExif(buffer, start, littleEndian) {
+  const view = new DataView(buffer);
+  const tags = {};
+  const gpsTags = {};
+
+  function read16(off) { return view.getUint16(start + off, littleEndian); }
+  function read32(off) { return view.getUint32(start + off, littleEndian); }
+
+  const ifd0Entries = read16(0);
+  let exifIFDOffset = 0, gpsIFDOffset = 0;
+
+  for (let i = 0; i < ifd0Entries; i++) {
+    const entryOff = 2 + i * 12;
+    const tag = read16(entryOff);
+    const type = read16(entryOff + 2);
+    const count = read32(entryOff + 4);
+    const valueOff = read32(entryOff + 8);
+
+    if (tag === 0x8769) exifIFDOffset = valueOff;
+    if (tag === 0x8825) gpsIFDOffset = valueOff;
+
+    const val = readIFDEntry(view, start, entryOff, littleEndian);
+    if (val !== undefined) {
+      const name = EXIF_TAGS[tag] || '0x' + tag.toString(16).padStart(4, '0');
+      tags[name] = val;
+    }
+  }
+
+  if (exifIFDOffset) {
+    parseSubIFD(view, start + exifIFDOffset, start, littleEndian, tags, EXIF_TAGS);
+  }
+  if (gpsIFDOffset) {
+    parseSubIFD(view, start + gpsIFDOffset, start, littleEndian, gpsTags, GPS_TAGS);
+  }
+
+  // next IFD
+  const nextIFD = read32(2 + ifd0Entries * 12);
+
+  return { tags, gpsTags };
+}
+
+function parseSubIFD(view, ifdStart, tiffStart, le, out, tagMap) {
+  const entries = view.getUint16(ifdStart, le);
+  for (let i = 0; i < entries; i++) {
+    const off = ifdStart + 2 + i * 12;
+    const tag = view.getUint16(off, le);
+    const val = readIFDEntry(view, tiffStart, off - tiffStart, le);
+    if (val !== undefined) {
+      const name = tagMap[tag] || '0x' + tag.toString(16).padStart(4, '0');
+      out[name] = val;
+    }
+  }
+}
+
+function readIFDEntry(view, start, entryOff, le) {
+  const tag = view.getUint16(start + entryOff, le);
+  const type = view.getUint16(start + entryOff + 2, le);
+  const count = view.getUint32(start + entryOff + 4, le);
+  const valueOffset = entryOff + 8;
+
+  const typeSizes = { 1:1, 2:1, 3:2, 4:4, 5:8, 6:1, 7:1, 8:2, 9:4, 10:8, 11:4, 12:8 };
+  const byteSize = (typeSizes[type] || 0) * count;
+
+  function readVal(off, t) {
+    const abs = start + off;
+    switch (t) {
+      case 1: return view.getUint8(abs);
+      case 2: return readAscii(view, abs, count);
+      case 3: return view.getUint16(abs, le);
+      case 4: return view.getUint32(abs, le);
+      case 5: {
+        const num = view.getUint32(abs, le);
+        const den = view.getUint32(abs + 4, le);
+        return den ? (num / den) : 0;
+      }
+      case 6: return view.getInt8(abs);
+      case 7: return readBytes(view, abs, Math.min(count, 64));
+      case 8: return view.getInt16(abs, le);
+      case 9: return view.getInt32(abs, le);
+      case 10: {
+        const num = view.getInt32(abs, le);
+        const den = view.getInt32(abs + 4, le);
+        return den ? (num / den) : 0;
+      }
+      case 11: return view.getFloat32(abs, le);
+      case 12: return view.getFloat64(abs, le);
+      default: return undefined;
+    }
+  }
+
+  if (byteSize <= 4) {
+    return readVal(valueOffset, type);
+  } else {
+    const off = view.getUint32(start + valueOffset, le);
+    return readVal(off, type);
+  }
+}
+
+function readAscii(view, offset, count) {
+  let s = '';
+  for (let i = 0; i < count; i++) {
+    const c = view.getUint8(offset + i);
+    if (c === 0) break;
+    s += String.fromCharCode(c);
+  }
+  return s.trim();
+}
+
+function readBytes(view, offset, count) {
+  const arr = [];
+  for (let i = 0; i < count; i++) arr.push(view.getUint8(offset + i).toString(16).padStart(2, '0'));
+  return arr.join(' ');
+}
+
+function rationalToDMS(rats, ref) {
+  if (!Array.isArray(rats) || rats.length < 3) return null;
+  const d = Math.floor(rats[0]);
+  const m = Math.floor(rats[1]);
+  const s = rats[2].toFixed(2);
+  return `${d}°${m}'${s}"${ref || ''}`;
+}
+
+function parseExifFromJPEG(buffer) {
+  const view = new DataView(buffer);
+  if (view.getUint16(0) !== 0xFFD8) return null;
+
+  let offset = 2;
+  while (offset < view.byteLength - 1) {
+    if (view.getUint8(offset) !== 0xFF) break;
+    const marker = view.getUint8(offset + 1);
+    if (marker === 0xE1) {
+      const length = view.getUint16(offset + 2);
+      const exifHeader = String.fromCharCode(
+        view.getUint8(offset + 4), view.getUint8(offset + 5),
+        view.getUint8(offset + 6), view.getUint8(offset + 7)
+      );
+      if (exifHeader === 'Exif') {
+        const tiffStart = offset + 10;
+        const bom = view.getUint16(tiffStart);
+        const le = bom === 0x4949;
+        return parseExif(buffer, tiffStart, le);
+      }
+    }
+    if (marker === 0xDA) break;
+    const segLen = view.getUint16(offset + 2);
+    offset += 2 + segLen;
+  }
+  return null;
+}
+
+// ======================== XMP Parser ========================
+
+function parseXMP(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const str = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+
+  // Find XMP segment
+  const xmpStart = str.indexOf('http://ns.adobe.com/xap/1.0/\x00');
+  if (xmpStart === -1) {
+    // Try searching for <x:xmpmeta in the whole file
+    const idx = str.indexOf('<x:xmpmeta');
+    if (idx === -1) return null;
+    const end = str.indexOf('</x:xmpmeta>', idx);
+    if (end === -1) return null;
+    return str.substring(idx, end + 13);
+  }
+
+  // In JPEG, XMP is in APP1 segment after the namespace URI
+  // Find the XML start
+  const afterNs = xmpStart + 29;
+  const xmlStart = str.indexOf('<?xpacket', afterNs);
+  if (xmlStart === -1) return null;
+
+  const xmlEnd = str.indexOf('</x:xmpmeta>', xmlStart);
+  if (xmlEnd === -1) return null;
+  return str.substring(xmlStart, xmlEnd + 13);
+}
+
+function extractXMPFields(xmpStr) {
+  if (!xmpStr) return {};
+  const fields = {};
+
+  function extract(pattern, label) {
+    const m = xmpStr.match(pattern);
+    if (m) fields[label] = m[1].trim();
+  }
+
+  // Dublin Core
+  extract(/<dc:creator>\s*<rdf:Seq>([\s\S]*?)<\/rdf:Seq>\s*<\/dc:creator>/, 'dc:creator');
+  extract(/<dc:description[^>]*>([^<]+)<\/dc:description>/, 'dc:description');
+  extract(/<dc:title>\s*<rdf:Alt>\s*<rdf:li[^>]*>([^<]+)<\/rdf:li>/, 'dc:title');
+  extract(/<dc:subject>\s*<rdf:Bag>([\s\S]*?)<\/rdf:Bag>\s*<\/dc:subject>/, 'dc:subject');
+  extract(/<dc:rights[^>]*>([^<]+)<\/dc:rights>/, 'dc:rights');
+  extract(/<dc:date>([^<]+)<\/dc:date>/, 'dc:date');
+
+  // Photoshop
+  extract(/photoshop:City="([^"]+)"/, 'photoshop:City');
+  extract(/photoshop:Country="([^"]+)"/, 'photoshop:Country');
+  extract(/photoshop:Credit="([^"]+)"/, 'photoshop:Credit');
+  extract(/photoshop:DateCreated="([^"]+)"/, 'photoshop:DateCreated');
+
+  // XMP Basic
+  extract(/xmp:CreateDate="([^"]+)"/, 'xmp:CreateDate');
+  extract(/xmp:CreatorTool="([^"]+)"/, 'xmp:CreatorTool');
+  extract(/xmp:Rating="([^"]+)"/, 'xmp:Rating');
+  extract(/xmp:ModifyDate="([^"]+)"/, 'xmp:ModifyDate');
+
+  // IPTC Core
+  extract(/IptcCore:CreatorContactInfo[^>]*>([^<]+)</, 'IptcCore:CreatorContactInfo');
+
+  // Rights Management
+  extract(/xmpRights:Marked="([^"]+)"/, 'xmpRights:Marked');
+  extract(/xmpRights:WebStatement="([^"]+)"/, 'xmpRights:WebStatement');
+
+  // Camera Raw
+  extract(/crs:Version="([^"]+)"/, 'crs:Version');
+  extract(/crs:WhiteBalance="([^"]+)"/, 'crs:WhiteBalance');
+
+  // Clean up dc:creator bag
+  if (fields['dc:creator']) {
+    const items = [];
+    const re = /<rdf:li[^>]*>([^<]+)<\/rdf:li>/g;
+    let m;
+    while ((m = re.exec(fields['dc:creator'])) !== null) items.push(m[1]);
+    if (items.length) fields['dc:creator'] = items.join(', ');
+  }
+
+  // Clean up dc:subject bag
+  if (fields['dc:subject']) {
+    const items = [];
+    const re = /<rdf:li[^>]*>([^<]+)<\/rdf:li>/g;
+    let m;
+    while ((m = re.exec(fields['dc:subject'])) !== null) items.push(m[1]);
+    if (items.length) fields['dc:subject'] = items.join(', ');
+  }
+
+  return fields;
+}
+
+// ======================== IPTC Parser ========================
+
+const IPTC_TAGS = {
+  0x00: 'RecordVersion', 0x03: 'ObjectType', 0x04: 'ObjectAttribute',
+  0x05: 'ObjectName', 0x07: 'EditStatus', 0x0A: 'Urgency',
+  0x0C: 'Subject', 0x0F: 'Category', 0x14: 'SupplementalCategory',
+  0x19: 'Keywords', 0x1E: 'SpecialInstructions', 0x23: 'DateCreated',
+  0x25: 'TimeCreated', 0x26: 'DigitalCreationDate', 0x27: 'DigitalCreationTime',
+  0x28: 'OriginatingProgram', 0x2A: 'ProgramVersion', 0x32: 'ObjectCycle',
+  0x37: 'Byline', 0x3C: 'BylineTitle', 0x3E: 'City',
+  0x3F: 'SubLocation', 0x40: 'ProvinceState', 0x41: 'CountryCode',
+  0x42: 'Country', 0x46: 'OriginalTransmission',
+  0x48: 'Headline', 0x4A: 'Credit', 0x4B: 'Source',
+  0x50: 'Copyright', 0x5A: 'Caption', 0x5B: 'Writer',
+  0x64: 'RasterizedCaption', 0x7A: 'ImageType', 0x7B: 'ImageOrientation',
+  0x82: 'LanguageIdentifier', 0x83: 'AudioType', 0x84: 'AudioSamplingRate',
+  0x85: 'AudioSamplingResolution', 0x86: 'AudioDuration',
+  0x87: 'AudioOutcue', 0x96: 'JobID', 0x97: 'MasterDocumentID',
+  0x98: 'ShortDocumentID', 0x99: 'UniqueDocumentID',
+  0x9A: 'OwnerID', 0xBB: 'Prefs', 0xC8: 'EnvelopeRecordVersion',
+  0xCA: 'Destination', 0xD0: 'FileFormat', 0xD2: 'FileVersion'
+};
+
+function parseIPTC(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const str = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  const tags = {};
+
+  // Search for Photoshop resource marker (8BIM)
+  // IPTC is stored in APP13 as Photoshop resource with resource ID 0x0404
+  for (let i = 0; i < bytes.length - 12; i++) {
+    // Look for '8BIM' followed by resource ID 0x0404
+    if (bytes[i] === 0x38 && bytes[i+1] === 0x42 && bytes[i+2] === 0x49 && bytes[i+3] === 0x4D &&
+        bytes[i+4] === 0x04 && bytes[i+5] === 0x04) {
+      const nameLen = bytes[i+6];
+      let dataStart = i + 7 + nameLen;
+      if (nameLen % 2 === 0) dataStart++; // padding
+      const dataLen = (bytes[dataStart] << 24) | (bytes[dataStart+1] << 16) | (bytes[dataStart+2] << 8) | bytes[dataStart+3];
+      dataStart += 4;
+
+      // Parse IPTC-NAA record
+      let pos = dataStart;
+      const end = dataStart + dataLen;
+      while (pos < end - 5) {
+        if (bytes[pos] !== 0x1C) break;
+        const recType = bytes[pos + 1];
+        const recNum = bytes[pos + 2];
+        const dataLenField = (bytes[pos + 3] << 8) | bytes[pos + 4];
+        pos += 5;
+        if (pos + dataLenField > end) break;
+
+        if (recType === 2) {
+          const tagName = IPTC_TAGS[recNum] || 'record2_' + recNum;
+          let value = '';
+          for (let j = 0; j < dataLenField; j++) value += String.fromCharCode(bytes[pos + j]);
+          if (tags[tagName]) {
+            tags[tagName] += '; ' + value;
+          } else {
+            tags[tagName] = value;
+          }
+        }
+        pos += dataLenField;
+      }
+      break;
+    }
+  }
+
+  // Also try direct IPTC scanning in the whole buffer (for files where it's not wrapped in 8BIM)
+  if (Object.keys(tags).length === 0) {
+    for (let i = 0; i < bytes.length - 5; i++) {
+      if (bytes[i] === 0x1C && bytes[i+1] === 0x02) {
+        const recNum = bytes[i+2];
+        const dataLenField = (bytes[i+3] << 8) | bytes[i+4];
+        if (dataLenField > 0 && dataLenField < 10000 && i + 5 + dataLenField <= bytes.length) {
+          const tagName = IPTC_TAGS[recNum] || 'record2_' + recNum;
+          let value = '';
+          for (let j = 0; j < dataLenField; j++) value += String.fromCharCode(bytes[i + 5 + j]);
+          if (!tags[tagName]) tags[tagName] = value;
+        }
+      }
+    }
+  }
+
+  return tags;
+}
+
+// ======================== C2PA Parser ========================
+
+function parseC2PA(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const str = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+
+  // C2PA manifests are stored in JPEG as APP11 segments (0xFFEB)
+  // Look for jumbf/c2pa markers
+  const c2paInfo = { found: false, raw: '', claims: [] };
+
+  // Search for C2PA JUMBF box marker
+  // JUMBF box type for C2PA: uuid 'jumb' followed by C2PA UUID
+  const jumbfMarker = 'jumb';
+  const c2paUUID = '6332706100110010800000aa00389b71'; // C2PA UUID in hex
+
+  for (let i = 0; i < bytes.length - 32; i++) {
+    // Look for 'c2pa' or 'jumb' signatures
+    if (str.substring(i, i + 4) === 'c2pa' || str.substring(i, i + 4) === 'jumb') {
+      c2paInfo.found = true;
+      // Extract some surrounding bytes for raw display
+      const snippetLen = Math.min(256, bytes.length - i);
+      let hex = '';
+      let ascii = '';
+      for (let j = 0; j < snippetLen; j++) {
+        hex += bytes[i+j].toString(16).padStart(2, '0') + ' ';
+        ascii += (bytes[i+j] >= 0x20 && bytes[i+j] < 0x7F) ? String.fromCharCode(bytes[i+j]) : '.';
+        if ((j + 1) % 16 === 0) { hex += '\n'; ascii = ''; }
+      }
+      c2paInfo.raw = hex;
+      break;
+    }
+  }
+
+  // Also check for C2PA in XMP (dc:provenance or xmp:History)
+  const xmpProv = str.match(/xmpMM?:DocumentID="([^"]+)"/);
+  if (xmpProv) {
+    c2paInfo.found = true;
+    c2paInfo.docId = xmpProv[1];
+  }
+
+  // Check for Content Credentials indicator
+  if (str.includes('C2PA') || str.includes('contentcredentials') || str.includes('c2pa.manifest')) {
+    c2paInfo.found = true;
+    const manifestMatch = str.match(/c2pa\.manifest['":\s=]+([^\s"'}{]+)/);
+    if (manifestMatch) c2paInfo.manifestUrl = manifestMatch[1];
+
+    // Try to find assertion labels
+    const assertions = [];
+    const assertRe = /c2pa\.assertions?['":\s=]+['"]?([^'"&\s,}]+)/gi;
+    let m;
+    while ((m = assertRe.exec(str)) !== null) {
+      if (!assertions.includes(m[1])) assertions.push(m[1]);
+    }
+    if (assertions.length) c2paInfo.assertions = assertions;
+  }
+
+  // Check for JUMBF description string containing 'urn:uuid:'
+  const uuidMatch = str.match(/urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (uuidMatch) {
+    c2paInfo.found = true;
+    c2paInfo.uuid = uuidMatch[0];
+  }
+
+  return c2paInfo;
+}
+
+// ======================== UI Logic ========================
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const results = document.getElementById('results');
+const previewImg = document.getElementById('previewImg');
+const summaryBar = document.getElementById('summaryBar');
+const toast = document.getElementById('toast');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+let allData = {};
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const buffer = e.target.result;
+    previewImg.src = URL.createObjectURL(file);
+
+    // Parse all metadata
+    const exifResult = parseExifFromJPEG(buffer);
+    const xmpStr = parseXMP(buffer);
+    const xmpFields = extractXMPFields(xmpStr);
+    const iptcTags = parseIPTC(buffer);
+    const c2paInfo = parseC2PA(buffer);
+
+    allData = { file: file.name, size: file.size, type: file.type };
+
+    // Summary badges
+    const badges = [];
+    badges.push({ text: file.name, cls: 'badge-found' });
+    badges.push({ text: formatSize(file.size), cls: 'badge-found' });
+
+    const hasExif = exifResult && Object.keys(exifResult.tags).length > 0;
+    const hasXmp = Object.keys(xmpFields).length > 0 || !!xmpStr;
+    const hasIptc = Object.keys(iptcTags).length > 0;
+    const hasC2pa = c2paInfo.found;
+
+    badges.push({ text: 'EXIF ' + (hasExif ? '✓' : '✗'), cls: hasExif ? 'badge-found' : 'badge-missing' });
+    badges.push({ text: 'XMP ' + (hasXmp ? '✓' : '✗'), cls: hasXmp ? 'badge-found' : 'badge-missing' });
+    badges.push({ text: 'IPTC ' + (hasIptc ? '✓' : '✗'), cls: hasIptc ? 'badge-found' : 'badge-missing' });
+    badges.push({ text: 'C2PA ' + (hasC2pa ? '✓' : '✗'), cls: hasC2pa ? 'badge-found' : 'badge-missing' });
+
+    if (hasExif && exifResult.gpsTags && (exifResult.gpsTags.GPSLatitude || exifResult.gpsTags.GPSLongitude)) {
+      badges.push({ text: '含 GPS 定位', cls: 'badge-warn' });
+    }
+
+    summaryBar.innerHTML = badges.map(b => `<span class="badge ${b.cls}">${b.text}</span>`).join('');
+
+    // EXIF section
+    renderExifSection(exifResult);
+
+    // XMP section
+    renderXmpSection(xmpStr, xmpFields);
+
+    // IPTC section
+    renderIptcSection(iptcTags);
+
+    // C2PA section
+    renderC2paSection(c2paInfo);
+
+    // All tags table
+    renderAllTags(exifResult, xmpFields, iptcTags);
+
+    results.classList.add('active');
+    dropZone.style.display = 'none';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderExifSection(result) {
+  const tag = document.getElementById('exifTag');
+  const body = document.getElementById('exifBody');
+
+  if (!result || Object.keys(result.tags).length === 0) {
+    tag.textContent = '未检测到';
+    body.innerHTML = '<p class="no-data">此图片不包含 EXIF 数据。</p>';
+    return;
+  }
+
+  const tagCount = Object.keys(result.tags).length + Object.keys(result.gpsTags).length;
+  tag.textContent = tagCount + ' 个标签';
+
+  let html = '<table>';
+
+  // Friendly display order
+  const priority = ['Make','Model','LensModel','LensMake','DateTimeOriginal','DateTimeDigitized',
+    'DateTime','ExposureTime','FNumber','ISOSpeedRatings','FocalLength','FocalLengthIn35mmFilm',
+    'Flash','WhiteBalance','MeteringMode','ExposureProgram','ExposureBiasValue',
+    'Orientation','ImageWidth','ImageLength','Software','Artist','Copyright',
+    'ShutterSpeedValue','ApertureValue','BrightnessValue','MaxApertureValue',
+    'SceneCaptureType','ColorSpace','PixelXDimension','PixelYDimension'];
+
+  const shown = new Set();
+  for (const key of priority) {
+    if (result.tags[key] !== undefined) {
+      html += formatExifRow(key, result.tags[key]);
+      shown.add(key);
+    }
+  }
+  for (const [k, v] of Object.entries(result.tags)) {
+    if (!shown.has(k) && v !== undefined) html += formatExifRow(k, v);
+  }
+
+  // GPS
+  if (Object.keys(result.gpsTags).length > 0) {
+    html += '<tr><td colspan="2" style="color:#5b8def;font-weight:600;padding-top:0.75rem;">GPS 信息</td></tr>';
+    const lat = result.gpsTags.GPSLatitude;
+    const lon = result.gpsTags.GPSLongitude;
+    const latRef = result.gpsTags.GPSLatitudeRef || 'N';
+    const lonRef = result.gpsTags.GPSLongitudeRef || 'E';
+
+    if (lat && lon) {
+      const latStr = rationalToDMS(lat, latRef);
+      const lonStr = rationalToDMS(lon, lonRef);
+      const latDec = dmsToDecimal(lat, latRef);
+      const lonDec = dmsToDecimal(lon, lonRef);
+      const mapUrl = `https://www.google.com/maps?q=${latDec},${lonDec}`;
+      html += `<tr><td>坐标</td><td>${latStr}, ${lonStr}<br><a class="gps-link" href="${mapUrl}" target="_blank">在 Google Maps 中查看 (${latDec.toFixed(6)}, ${lonDec.toFixed(6)})</a></td></tr>`;
+    }
+
+    for (const [k, v] of Object.entries(result.gpsTags)) {
+      if (k !== 'GPSLatitude' && k !== 'GPSLongitude' && k !== 'GPSLatitudeRef' && k !== 'GPSLongitudeRef' && v !== undefined) {
+        html += formatExifRow(k, v);
+      }
+    }
+  }
+
+  html += '</table>';
+  allData.exif = result.tags;
+  allData.gps = result.gpsTags;
+  body.innerHTML = html;
+}
+
+function dmsToDecimal(rats, ref) {
+  if (!Array.isArray(rats) || rats.length < 3) return 0;
+  let dec = rats[0] + rats[1] / 60 + rats[2] / 3600;
+  if (ref === 'S' || ref === 'W') dec = -dec;
+  return dec;
+}
+
+function formatExifRow(key, value) {
+  let display = value;
+  if (key === 'Orientation') display = ORIENTATIONS[value] || value;
+  else if (key === 'ExposureProgram') display = EXPOSURE_PROGRAMS[value] || value;
+  else if (key === 'MeteringMode') display = METERING_MODES[value] || value;
+  else if (key === 'Flash') display = FLASH_FLAGS[value] || ('0x' + value.toString(16));
+  else if (key === 'ExposureTime') display = value < 1 ? `1/${Math.round(1/value)}s` : value + 's';
+  else if (key === 'FNumber') display = 'f/' + value;
+  else if (key === 'FocalLength') display = value + 'mm';
+  else if (key === 'ColorSpace') display = value === 1 ? 'sRGB' : value === 0xFFFF ? '未校准' : value;
+  else if (key === 'WhiteBalance') display = value === 0 ? '自动' : value === 1 ? '手动' : value;
+  else if (key === 'ExposureBiasValue') display = (value >= 0 ? '+' : '') + value + ' EV';
+  else if (typeof value === 'number') display = value.toString();
+
+  return `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(String(display))}</td></tr>`;
+}
+
+function renderXmpSection(raw, fields) {
+  const tag = document.getElementById('xmpTag');
+  const body = document.getElementById('xmpBody');
+
+  if (!raw) {
+    tag.textContent = '未检测到';
+    body.innerHTML = '<p class="no-data">此图片不包含 XMP 数据。</p>';
+    return;
+  }
+
+  const fieldCount = Object.keys(fields).length;
+  tag.textContent = fieldCount > 0 ? fieldCount + ' 个字段' : '已检测到';
+
+  let html = '';
+  if (fieldCount > 0) {
+    html += '<table>';
+    for (const [k, v] of Object.entries(fields)) {
+      html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  // Show raw XMP (truncated)
+  const truncated = raw.length > 8000 ? raw.substring(0, 8000) + '\n\n... (已截断，共 ' + raw.length + ' 字符)' : raw;
+  html += `<details style="margin-top:0.75rem;"><summary style="cursor:pointer;color:#888;font-size:0.8rem;">查看原始 XMP (${raw.length} 字符)</summary><pre class="raw-block">${escapeHtml(truncated)}</pre></details>`;
+
+  allData.xmp = fields;
+  allData.xmpRaw = raw;
+  body.innerHTML = html;
+}
+
+function renderIptcSection(tags) {
+  const tag = document.getElementById('iptcTag');
+  const body = document.getElementById('iptcBody');
+
+  if (Object.keys(tags).length === 0) {
+    tag.textContent = '未检测到';
+    body.innerHTML = '<p class="no-data">此图片不包含 IPTC 数据。</p>';
+    return;
+  }
+
+  tag.textContent = Object.keys(tags).length + ' 个标签';
+  let html = '<table>';
+  for (const [k, v] of Object.entries(tags)) {
+    html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+  }
+  html += '</table>';
+
+  allData.iptc = tags;
+  body.innerHTML = html;
+}
+
+function renderC2paSection(info) {
+  const tag = document.getElementById('c2paTag');
+  const body = document.getElementById('c2paBody');
+
+  if (!info.found) {
+    tag.textContent = '未检测到';
+    body.innerHTML = '<p class="no-data">此图片不包含 C2PA / Content Credentials 数据。</p>';
+    return;
+  }
+
+  tag.textContent = '已检测到';
+  tag.className = 'tag badge-found';
+
+  let html = '<div class="c2pa-info">';
+  html += '<div class="manifest-title">C2PA / Content Credentials 检测结果</div>';
+
+  if (info.uuid) {
+    html += `<p><span class="claim-label">UUID:</span> ${escapeHtml(info.uuid)}</p>`;
+  }
+  if (info.manifestUrl) {
+    html += `<p><span class="claim-label">Manifest:</span> ${escapeHtml(info.manifestUrl)}</p>`;
+  }
+  if (info.docId) {
+    html += `<p><span class="claim-label">Document ID:</span> ${escapeHtml(info.docId)}</p>`;
+  }
+  if (info.assertions && info.assertions.length > 0) {
+    html += `<p><span class="claim-label">Assertions:</span> ${info.assertions.map(a => escapeHtml(a)).join(', ')}</p>`;
+  }
+
+  if (info.raw) {
+    html += `<details style="margin-top:0.75rem;"><summary style="cursor:pointer;color:#888;font-size:0.8rem;">查看原始数据</summary><pre class="raw-block">${escapeHtml(info.raw)}</pre></details>`;
+  }
+
+  html += '</div>';
+  allData.c2pa = info;
+  body.innerHTML = html;
+}
+
+function renderAllTags(exifResult, xmpFields, iptcTags) {
+  const tag = document.getElementById('allTag');
+  const body = document.getElementById('allBody');
+
+  let total = 0;
+  if (exifResult) total += Object.keys(exifResult.tags).length + Object.keys(exifResult.gpsTags).length;
+  total += Object.keys(xmpFields).length;
+  total += Object.keys(iptcTags).length;
+
+  tag.textContent = total + ' 项';
+
+  let html = '';
+  if (exifResult) {
+    html += '<table>';
+    for (const [k, v] of Object.entries(exifResult.tags)) {
+      html += `<tr><td>EXIF</td><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>`;
+    }
+    for (const [k, v] of Object.entries(exifResult.gpsTags)) {
+      html += `<tr><td>GPS</td><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (Object.keys(xmpFields).length > 0) {
+    html += '<table>';
+    for (const [k, v] of Object.entries(xmpFields)) {
+      html += `<tr><td>XMP</td><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (Object.keys(iptcTags).length > 0) {
+    html += '<table>';
+    for (const [k, v] of Object.entries(iptcTags)) {
+      html += `<tr><td>IPTC</td><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  body.innerHTML = html || '<p class="no-data">无元数据。</p>';
+}
+
+function toggleSection(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  const text = JSON.stringify(allData, null, 2);
+  navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'));
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  results.classList.remove('active');
+  dropZone.style.display = '';
+  fileInput.value = '';
+  allData = {};
+});
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

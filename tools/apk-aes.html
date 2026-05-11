@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haut Security Tool - AES 加解密</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 20px auto; padding: 0 20px; background-color: #f4f7f9; }
+        .container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .section { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        textarea { width: 100%; height: 80px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        .button-group { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+        button { padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-success:hover { background-color: #218838; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        .result-box { margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 5px solid #007bff; word-break: break-all; }
+        .ts-info { font-size: 0.9em; color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Haut Security AES 工具</h2>
+
+    <div class="section">
+        <label>明文数据 (Plaintext):</label>
+        <textarea id="plainInput" placeholder="请输入要加密的内容..."></textarea>
+        <div class="button-group">
+            <button class="btn-primary" onclick="handleEncrypt(true)">加密 (带时间戳)</button>
+            <button class="btn-secondary" onclick="handleEncrypt(false)">加密 (不带时间戳)</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <label>密文数据 (Base64 Ciphertext):</label>
+        <textarea id="cipherInput" placeholder="请输入要解密的 Base64 字符串..."></textarea>
+        <div class="button-group">
+            <button class="btn-success" onclick="handleDecrypt()">立即解密</button>
+        </div>
+    </div>
+
+    <div id="resultWrapper" style="display: none;">
+        <label>操作结果:</label>
+        <div class="result-box" id="resultOutput"></div>
+        <div id="tsDisplay" class="ts-info"></div>
+        <div class="button-group" style="margin-top:10px;">
+            <button class="btn-secondary" onclick="copyAesResult()">复制结果</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 固定配置（与 Python 源码一致）
+    const CONFIG = {
+        key: CryptoJS.enc.Utf8.parse("1234567890123456"),
+        iv: CryptoJS.enc.Utf8.parse("0392039203920300"),
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+    };
+
+    /**
+     * 加密逻辑
+     */
+    function encrypt(data, useTimestamp) {
+        let textToEncrypt = data;
+        if (useTimestamp) {
+            const timestamp = new Date().getTime(); // 毫秒级时间戳
+            textToEncrypt = `${data}_${timestamp}`;
+        }
+
+        const encrypted = CryptoJS.AES.encrypt(textToEncrypt, CONFIG.key, {
+            iv: CONFIG.iv,
+            mode: CONFIG.mode,
+            padding: CONFIG.padding
+        });
+
+        return encrypted.toString(); // 返回 Base64 字符串
+    }
+
+    /**
+     * 解密逻辑
+     */
+    function decrypt(ciphertext) {
+        try {
+            const decrypted = CryptoJS.AES.decrypt(ciphertext.trim(), CONFIG.key, {
+                iv: CONFIG.iv,
+                mode: CONFIG.mode,
+                padding: CONFIG.padding
+            });
+
+            const fullText = decrypted.toString(CryptoJS.enc.Utf8);
+            
+            if (!fullText) throw new Error("解密失败，请检查密文或密钥是否正确");
+
+            // 拆分逻辑
+            if (fullText.includes('_')) {
+                const parts = fullText.split('_');
+                const ts = parts.pop(); // 最后一个是时间戳
+                const data = parts.join('_'); // 剩余的是原数据
+                return { status: "success", data: data, timestamp: ts, full: fullText };
+            }
+
+            return { status: "success", data: fullText, full: fullText };
+        } catch (e) {
+            return { status: "error", reason: e.message };
+        }
+    }
+
+    // UI 交互函数
+    function handleEncrypt(withTS) {
+        const input = document.getElementById('plainInput').value;
+        if (!input) return alert("请输入内容");
+        
+        const result = encrypt(input, withTS);
+        showResult(result, withTS ? "加密成功 (已附加当前时间戳)" : "加密成功 (纯数据)");
+    }
+
+    function handleDecrypt() {
+        const input = document.getElementById('cipherInput').value;
+        if (!input) return alert("请输入密文");
+
+        const res = decrypt(input);
+        if (res.status === "success") {
+            let msg = `解密内容: ${res.data}`;
+            let tsMsg = res.timestamp ? `检测到时间戳: ${res.timestamp} (${new Date(parseInt(res.timestamp)).toLocaleString()})` : "未检测到时间戳";
+            showResult(res.data, msg, tsMsg);
+        } else {
+            showResult("解密失败", "原因: " + res.reason);
+        }
+    }
+
+    function showResult(mainText, title, subText = "") {
+        const wrapper = document.getElementById('resultWrapper');
+        const output = document.getElementById('resultOutput');
+        const tsInfo = document.getElementById('tsDisplay');
+
+        wrapper.style.display = 'block';
+        output.innerHTML = `<strong>${title}</strong><br>${mainText}`;
+        tsInfo.innerText = subText;
+    }
+
+    // 复制结果到剪贴板（只复制主体文本，不包含标题）
+    function copyAesResult() {
+        const output = document.getElementById('resultOutput');
+        const tsInfo = document.getElementById('tsDisplay');
+        if (!output) return alert('当前没有可复制的结果');
+
+        let mainText = '';
+        const titleEl = output.querySelector('strong');
+        if (titleEl) {
+            let node = titleEl.nextSibling;
+            while (node) {
+                mainText += (node.textContent || '');
+                node = node.nextSibling;
+            }
+            mainText = mainText.trim();
+        } else {
+            const all = output.innerText || output.textContent || '';
+            const lines = all.split('\n');
+            if (lines.length > 1) { lines.shift(); mainText = lines.join('\n').trim(); }
+            else { mainText = all.trim(); }
+        }
+
+        let text = mainText;
+        if (tsInfo && tsInfo.innerText) {
+            text = text ? (text + '\n' + tsInfo.innerText) : tsInfo.innerText;
+        }
+        if (!text) return alert('当前没有可复制的结果');
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => alert('已复制结果到剪贴板')).catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+
+        function fallbackCopy(val) {
+            const ta = document.createElement('textarea');
+            ta.value = val;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); alert('已复制结果到剪贴板'); } catch (e) { alert('复制失败'); }
+            document.body.removeChild(ta);
+        }
+    }
+</script>
+
+</body>
+</html>
