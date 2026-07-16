@@ -1,30 +1,35 @@
-# YoungZM339 Homepage
+# Personal Website
 
-Personal homepage and frontend source for [youngzm.com](https://youngzm.com).
+这是一个无需构建步骤的个人静态网站仓库。根目录首页提供个人介绍、技能展示和联系入口；tools 目录收录若干可在浏览器中直接运行的小工具页面。
 
-## What this repository contains
+## 内容结构
 
-This repository contains the source files used to build and publish the personal homepage. Treat the generated output as a build artifact and keep source content, configuration, and deployment settings documented separately.
+- index.html：网站主页与页面交互逻辑。
+- imgs/：主页使用的静态图片资源。
+- tools/：独立的浏览器端工具页面及其脚本。
+- sliding-it/：独立静态页面内容。
+- CNAME：静态托管时使用的自定义域名声明。
 
-## Local development
+## 本地预览
 
-1. Inspect package.json to confirm the supported Node.js version and available scripts.
-2. Install dependencies with the package manager selected by the lockfile.
-3. Run the development script listed by package.json.
-4. Build the production output before publishing.
+本项目没有安装依赖或构建步骤。使用任意静态文件服务器从仓库根目录提供页面即可，例如：
 
-~~~bash
-npm install
-npm run
-~~~
+    python -m http.server 8080
 
-## Deployment checklist
+随后访问本机的 8080 端口。也可以直接用浏览器打开 HTML 文件；当工具页依赖相对路径资源时，建议使用静态服务器预览。
 
-- Keep secrets and personal tokens outside the repository.
-- Verify links, mobile layout, metadata, and accessibility before publishing.
-- Configure the custom domain and HTTPS in the hosting provider.
-- Do not commit generated caches or local environment files.
+## 部署
 
-## License
+将仓库根目录作为静态站点发布目录部署即可。部署前请确认：
 
-Unless a subdirectory states otherwise, the source is maintained as a personal project. Check the repository history and existing license files before reusing assets.
+- 自定义域名及 CNAME 与托管平台设置一致；
+- 所有外链和联系信息都适合公开；
+- tools 中的客户端处理逻辑符合目标使用场景的隐私要求。
+
+## 维护边界
+
+这是一个静态站点，不包含服务器端身份认证、数据存储或访问控制。任何需要保护的内容都不应放入该仓库或直接部署到公开站点。
+
+## 许可证
+
+仓库当前未声明许可证。使用、再发布或复用其中的资源前，请先补充明确的许可说明。
